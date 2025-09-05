@@ -1,0 +1,644 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>1day Planner Demo — JSON / PNG(三面図) / Markdown 出力</title>
+<style>
+:root{
+  --bg:#0b0c10; --panel:#121420; --ink:#e6e7eb; --muted:#9aa0aa;
+  --acc:#7aa2ff; --ok:#10b981; --warn:#f59e0b; --bad:#ef4444;
+  --line:#272b37; --chip:#1b1f2e;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0; background:linear-gradient(180deg,#0a0b10, #0c0f16);
+  color:var(--ink); font:14px/1.6 system-ui, -apple-system, Segoe UI, Roboto, "Hiragino Sans", "Noto Sans JP", sans-serif;
+}
+header{
+  padding:16px 20px; border-bottom:1px solid var(--line);
+  position:sticky; top:0; backdrop-filter: blur(8px); background:rgba(11,12,16,.7);
+}
+h1{margin:0; font-size:18px; letter-spacing:.2px}
+main{display:grid; grid-template-columns:320px 1fr; gap:16px; padding:16px; max-width:1280px; margin:0 auto}
+@media (max-width: 960px){ main{grid-template-columns:1fr} }
+.panel{
+  background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:12px;
+  box-shadow:0 1px 0 rgba(255,255,255,0.05) inset, 0 12px 30px rgba(0,0,0,.25);
+}
+.panel h2{margin:6px 4px 10px; font-size:14px; color:var(--muted)}
+.row{display:flex; gap:8px; align-items:center; margin:6px 0}
+.row > label{min-width:64px; color:var(--muted)}
+input[type="time"], input[type="text"], select, textarea{
+  width:100%; padding:8px 10px; background:#0e1120; color:var(--ink);
+  border:1px solid #1e2333; border-radius:8px; outline:none;
+}
+textarea{min-height:62px; resize:vertical}
+.btn{
+  appearance:none; border:1px solid #1f2640; background:#11162b; color:var(--ink);
+  padding:9px 12px; border-radius:10px; cursor:pointer; transition:transform .02s ease;
+}
+.btn:hover{border-color:#2f365a}
+.btn:active{transform:translateY(1px)}
+.btn.primary{background:linear-gradient(180deg,#203264,#182449); border-color:#2a3e77}
+.btn.warn{background:linear-gradient(180deg,#4a2a18,#3a1e10); border-color:#6a3e24}
+.btn.ghost{background:#0e1120}
+.toolbar{display:flex; gap:8px; flex-wrap:wrap}
+.kbd{padding:.5px 6px; border:1px solid #2a3147; background:#0f1322; border-radius:6px; color:#aeb6c7; font-size:12px}
+ul#eventList{list-style:none; padding:0; margin:8px 0 0; max-height:42vh; overflow:auto}
+li.card{
+  display:grid; grid-template-columns:86px 1fr auto; align-items:center;
+  gap:8px; padding:8px; border:1px solid var(--line); border-radius:10px; background:#0f1220; margin-bottom:6px;
+}
+.badge{display:inline-flex; align-items:center; gap:6px; padding:4px 8px; background:var(--chip); border:1px solid #1d2234; border-radius:999px; font-size:12px; color:#cbd5e1}
+.colorDot{width:10px; height:10px; border-radius:50%}
+svg{width:100%; height:auto; display:block; background:transparent}
+.vizGrid{display:grid; grid-template-columns:1fr 1fr; gap:16px}
+@media (max-width: 960px){ .vizGrid{grid-template-columns:1fr} }
+.caption{margin:6px 0 0; color:var(--muted); font-size:12px}
+hr.sep{border:none; border-top:1px dashed #2a3147; margin:8px 0}
+small.meta{color:var(--muted)}
+footer{padding:12px 20px; color:var(--muted)}
+</style>
+</head>
+<body>
+<header>
+  <h1>1day Planner Demo <small class="meta">— JSON / PNG(三面図) / Markdown</small></h1>
+</header>
+<main>
+  <!-- 左：入力とエクスポート -->
+  <section class="panel">
+    <h2>計画入力</h2>
+    <div class="row">
+      <label>日付</label>
+      <input type="date" id="dateInput">
+    </div>
+    <div class="row">
+      <label>タイトル</label>
+      <input type="text" id="titleInput" placeholder="例: 論文執筆">
+    </div>
+    <div class="row">
+      <label>開始</label>
+      <input type="time" id="startInput" step="300" value="09:00">
+    </div>
+    <div class="row">
+      <label>終了</label>
+      <input type="time" id="endInput" step="300" value="10:30">
+    </div>
+    <div class="row">
+      <label>カテゴリ</label>
+      <select id="catInput"></select>
+    </div>
+    <div class="row">
+      <label>メモ</label>
+      <textarea id="noteInput" placeholder="任意のメモ"></textarea>
+    </div>
+    <div class="toolbar">
+      <button class="btn primary" id="addBtn">予定を追加</button>
+      <button class="btn ghost" id="clearBtn" title="全削除（確認あり）">全削除</button>
+    </div>
+
+    <hr class="sep">
+
+    <h2>予定リスト</h2>
+    <ul id="eventList"></ul>
+
+    <hr class="sep">
+
+    <h2>エクスポート</h2>
+    <div class="toolbar">
+      <button class="btn" id="exportJsonBtn">JSONを保存</button>
+      <button class="btn" id="exportMdBtn">Markdownをコピー</button>
+      <button class="btn" id="exportPngBtn">三面図PNGを保存</button>
+    </div>
+    <p class="caption">ショートカット: <span class="kbd">E</span> = PNG / <span class="kbd">J</span> = JSON / <span class="kbd">M</span> = Markdown</p>
+  </section>
+
+  <!-- 右：可視化 -->
+  <section class="panel">
+    <h2>可視化</h2>
+    <div class="vizGrid">
+      <div>
+        <svg id="clockSvg" viewBox="0 0 400 400" aria-label="時計ビュー"></svg>
+        <p class="caption">時計ビュー（24h）</p>
+      </div>
+      <div>
+        <svg id="bandSvg" viewBox="0 0 800 220" aria-label="帯グラフ"></svg>
+        <p class="caption">帯グラフ（0–24h）</p>
+      </div>
+    </div>
+    <div style="margin-top:12px">
+      <svg id="listSvg" viewBox="0 0 800 320" aria-label="リスト（画像用）"></svg>
+      <p class="caption">画像用リスト（PNG合成に使用）</p>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <small>注: デモのため「ドラッグ編集/重複自動解決」は未実装。JSON/PNG/Markdown出力と可視化を最短で試せます。</small>
+</footer>
+
+<script>
+/* =========================
+   小さく強いヘルパ
+========================= */
+const $ = sel => document.querySelector(sel);
+const pad2 = n => String(n).padStart(2,'0');
+const timeStrToMin = (t) => { const [h,m] = t.split(':').map(Number); return h*60+m; };
+const minToTimeStr = (m) => `${pad2(Math.floor(m/60))}:${pad2(m%60)}`;
+const by = (k) => (a,b)=> (a[k]<b[k]? -1 : a[k]>b[k]? 1 : 0);
+const todayISO = () => new Date(Date.now() - (new Date().getTimezoneOffset()*60000)).toISOString().slice(0,10);
+const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+const sum = arr => arr.reduce((a,b)=>a+b,0);
+
+/* =========================
+   状態
+========================= */
+const state = {
+  date: todayISO(),
+  categories: [
+    {id:'work', name:'研究', color:'#3B82F6'},
+    {id:'break', name:'休憩', color:'#F59E0B'},
+    {id:'gym',  name:'ジム', color:'#10B981'},
+    {id:'life', name:'生活', color:'#a78bfa'}
+  ],
+  events: []
+};
+
+/* =========================
+   初期UIセットアップ
+========================= */
+function initUI(){
+  // 日付
+  $('#dateInput').value = state.date;
+  $('#dateInput').addEventListener('change', e => { state.date = e.target.value; drawAll(); persist(); });
+
+  // カテゴリ
+  const catSel = $('#catInput');
+  catSel.innerHTML = state.categories.map(c=>`<option value="${c.id}">${c.name}</option>`).join('');
+
+  $('#addBtn').addEventListener('click', addEventFromForm);
+  $('#clearBtn').addEventListener('click', clearAll);
+  $('#exportJsonBtn').addEventListener('click', exportJSON);
+  $('#exportMdBtn').addEventListener('click', exportMarkdown);
+  $('#exportPngBtn').addEventListener('click', exportThreePanePng);
+
+  // ショートカット
+  window.addEventListener('keydown', (e)=>{
+    if (e.target.closest('input,textarea')) return;
+    if (e.key.toLowerCase()==='j') exportJSON();
+    if (e.key.toLowerCase()==='m') exportMarkdown();
+    if (e.key.toLowerCase()==='e') exportThreePanePng();
+  });
+
+  restore();
+  drawAll();
+}
+
+/* =========================
+   CRUD
+========================= */
+function addEventFromForm(){
+  const title = $('#titleInput').value.trim() || '(無題)';
+  const start = timeStrToMin($('#startInput').value);
+  const end = timeStrToMin($('#endInput').value);
+  const categoryId = $('#catInput').value;
+  const note = $('#noteInput').value.trim();
+
+  if (end<=start){ alert('終了時刻は開始より後にしてください'); return; }
+
+  const ev = { id: crypto.randomUUID(), title, start, end, categoryId, note };
+  state.events.push(ev);
+  state.events.sort((a,b)=>a.start-b.start);
+  $('#titleInput').value=''; $('#noteInput').value='';
+  drawAll(); persist();
+}
+
+function deleteEvent(id){
+  state.events = state.events.filter(e=>e.id!==id);
+  drawAll(); persist();
+}
+
+function clearAll(){
+  if (!confirm('この日の予定を全て削除します。よろしいですか？')) return;
+  state.events = [];
+  drawAll(); persist();
+}
+
+/* =========================
+   レンダリング：リスト（HTML）
+========================= */
+function renderEventList(){
+  const ul = $('#eventList');
+  ul.innerHTML = '';
+  for (const ev of state.events){
+    const cat = state.categories.find(c=>c.id===ev.categoryId);
+    const li = document.createElement('li');
+    li.className='card';
+    li.innerHTML = `
+      <div><span class="badge"><span class="colorDot" style="background:${cat?.color||'#999'}"></span>${cat?.name||'カテゴリ'}</span></div>
+      <div>
+        <div><strong>${ev.title}</strong> <small class="meta">${minToTimeStr(ev.start)}–${minToTimeStr(ev.end)}</small></div>
+        ${ev.note? `<div class="meta" style="white-space:pre-wrap">${escapeHtml(ev.note)}</div>`:''}
+      </div>
+      <div>
+        <button class="btn warn" data-id="${ev.id}">削除</button>
+      </div>
+    `;
+    li.querySelector('button').addEventListener('click', ()=>deleteEvent(ev.id));
+    ul.appendChild(li);
+  }
+}
+function escapeHtml(s){ return s.replace(/[&<>"']/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[m])); }
+
+/* =========================
+   レンダリング：時計SVG
+========================= */
+function drawClock(){
+  const svg = $('#clockSvg');
+  const cx=200, cy=200, rOuter=160, rInner=110;
+  const now = new Date();
+  const nowMin = now.getHours()*60 + now.getMinutes();
+
+  svg.innerHTML = '';
+  // 背景リング
+  const bg = document.createElementNS('http://www.w3.org/2000/svg','circle');
+  bg.setAttribute('cx',cx); bg.setAttribute('cy',cy); bg.setAttribute('r',rOuter);
+  bg.setAttribute('fill','#0f1220'); bg.setAttribute('stroke','#1f2540'); bg.setAttribute('stroke-width','2');
+  svg.appendChild(bg);
+
+  // 目盛り（毎時）
+  for(let h=0; h<24; h++){
+    const a = (h/24)*Math.PI*2 - Math.PI/2;
+    const x1 = cx + Math.cos(a)*(rOuter-6);
+    const y1 = cy + Math.sin(a)*(rOuter-6);
+    const x2 = cx + Math.cos(a)*(rOuter-20);
+    const y2 = cy + Math.sin(a)*(rOuter-20);
+    const tick = document.createElementNS(svg.namespaceURI,'line');
+    tick.setAttribute('x1',x1); tick.setAttribute('y1',y1);
+    tick.setAttribute('x2',x2); tick.setAttribute('y2',y2);
+    tick.setAttribute('stroke','#2a304f'); tick.setAttribute('stroke-width', h%6===0? '2.2':'1.2');
+    svg.appendChild(tick);
+    if (h%6===0){
+      const tx = cx + Math.cos(a)*(rOuter-34);
+      const ty = cy + Math.sin(a)*(rOuter-34) + 4;
+      const t = document.createElementNS(svg.namespaceURI,'text');
+      t.setAttribute('x',tx); t.setAttribute('y',ty);
+      t.setAttribute('text-anchor','middle'); t.setAttribute('font-size','12'); t.setAttribute('fill','#9aa0aa');
+      t.textContent = h===0? '0' : String(h);
+      svg.appendChild(t);
+    }
+  }
+
+  // イベント弧
+  for (const ev of state.events){
+    const cat = state.categories.find(c=>c.id===ev.categoryId) || {color:'#888'};
+    const path = ringArcPath(cx,cy,rInner,rOuter, ev.start/1440, ev.end/1440);
+    const seg = document.createElementNS(svg.namespaceURI,'path');
+    seg.setAttribute('d', path);
+    seg.setAttribute('fill', cat.color);
+    seg.setAttribute('opacity', ev.end<=nowMin ? 0.35 : 0.85);
+    svg.appendChild(seg);
+  }
+
+  // 現在時刻ライン
+  const a = (nowMin/1440)*Math.PI*2 - Math.PI/2;
+  const x = cx + Math.cos(a)*rOuter, y = cy + Math.sin(a)*rOuter;
+  const ln = document.createElementNS(svg.namespaceURI,'line');
+  ln.setAttribute('x1',cx); ln.setAttribute('y1',cy);
+  ln.setAttribute('x2',x);  ln.setAttribute('y2',y);
+  ln.setAttribute('stroke','#e5e7eb'); ln.setAttribute('stroke-width','2');
+  svg.appendChild(ln);
+
+  // 凡例
+  let lx=24, ly=24;
+  for (const c of state.categories){
+    const g = document.createElementNS(svg.namespaceURI,'g');
+    const dot = document.createElementNS(svg.namespaceURI,'rect');
+    dot.setAttribute('x',lx); dot.setAttribute('y',ly-10); dot.setAttribute('width',14); dot.setAttribute('height',14);
+    dot.setAttribute('rx',3); dot.setAttribute('fill',c.color);
+    const t = document.createElementNS(svg.namespaceURI,'text');
+    t.setAttribute('x',lx+20); t.setAttribute('y',ly+2);
+    t.setAttribute('fill','#cbd5e1'); t.setAttribute('font-size','12');
+    t.textContent = c.name;
+    g.appendChild(dot); g.appendChild(t); svg.appendChild(g);
+    ly += 18;
+  }
+}
+function ringArcPath(cx,cy,r0,r1, t0, t1){
+  const a0 = t0*2*Math.PI - Math.PI/2;
+  const a1 = t1*2*Math.PI - Math.PI/2;
+  const largeArc = (t1 - t0) > 0.5 ? 1 : 0;
+  const x0 = cx + Math.cos(a0)*r1, y0 = cy + Math.sin(a0)*r1;
+  const x1 = cx + Math.cos(a1)*r1, y1 = cy + Math.sin(a1)*r1;
+  const x2 = cx + Math.cos(a1)*r0, y2 = cy + Math.sin(a1)*r0;
+  const x3 = cx + Math.cos(a0)*r0, y3 = cy + Math.sin(a0)*r0;
+  return [
+    `M ${x0} ${y0}`,
+    `A ${r1} ${r1} 0 ${largeArc} 1 ${x1} ${y1}`,
+    `L ${x2} ${y2}`,
+    `A ${r0} ${r0} 0 ${largeArc} 0 ${x3} ${y3}`,
+    'Z'
+  ].join(' ');
+}
+
+/* =========================
+   レンダリング：帯グラフSVG
+========================= */
+function drawBand(){
+  const svg = $('#bandSvg');
+  const W = 800, H = 220, padL=50, padR=20, padT=24, padB=28;
+  svg.innerHTML='';
+  // 背景
+  rect(svg,0,0,W,H,'#0f1220','#1f2540');
+
+  // 時間目盛
+  for (let h=0; h<=24; h+=2){
+    const x = padL + (W-padL-padR)*(h/24);
+    const l = line(svg,x,padT,x,H-padB, '#1f2441', 1);
+    const t = text(svg, x, H-8, String(h), '#9aa0aa', 12, 'middle');
+    l.setAttribute('opacity','0.7');
+  }
+
+  // イベント
+  const laneH = 28, laneGap = 6;
+  // 簡易：重なりは縦にずらす（衝突カウント）
+  const lanes = [];
+  for (const ev of state.events){
+    const s = ev.start/1440, e = ev.end/1440;
+    const x = padL + (W-padL-padR)*s;
+    const w = Math.max(2, (W-padL-padR)*(e-s));
+    let lane = 0;
+    while(lanes[lane] && lanes[lane] > ev.start) lane++;
+    lanes[lane] = ev.end;
+
+    const y = padT + lane*(laneH+laneGap);
+    const cat = state.categories.find(c=>c.id===ev.categoryId)||{color:'#888'};
+    const group = document.createElementNS(svg.namespaceURI,'g');
+    const r = rect(svg,x,y,w,laneH, cat.color, 'transparent', 6);
+    r.setAttribute('opacity', '0.85');
+    const label = `${ev.title} ${minToTimeStr(ev.start)}–${minToTimeStr(ev.end)}`;
+    const tt = text(svg, x+8, y+18, label, '#0b0c10', 12, 'start');
+    group.appendChild(r); group.appendChild(tt); svg.appendChild(group);
+  }
+
+  // 軸ラベル
+  text(svg, padL-34, padT-6, '時間', '#9aa0aa', 12, 'start');
+}
+
+/* =========================
+   レンダリング：画像用リストSVG
+========================= */
+function drawListSvg(){
+  const svg = $('#listSvg');
+  const W=800, H=320, pad=20;
+  svg.innerHTML='';
+  rect(svg,0,0,W,H,'#0f1220','#1f2540');
+
+  text(svg, pad, pad+4, `${state.date} の計画`, '#cbd5e1', 16, 'start', true);
+
+  // 見出し
+  let y = pad+28;
+  text(svg, pad, y, '開始', '#9aa0aa', 12, 'start'); 
+  text(svg, pad+80, y, '終了', '#9aa0aa', 12, 'start');
+  text(svg, pad+160, y, 'タイトル / カテゴリ', '#9aa0aa', 12, 'start');
+
+  y += 8; line(svg, pad, y, W-pad, y, '#232a46', 1); y += 14;
+
+  for (const ev of state.events){
+    const cat = state.categories.find(c=>c.id===ev.categoryId)||{name:'',color:'#888'};
+    // 色チップ
+    const chip = document.createElementNS(svg.namespaceURI,'rect');
+    chip.setAttribute('x', pad); chip.setAttribute('y', y-10);
+    chip.setAttribute('width',10); chip.setAttribute('height',10); chip.setAttribute('rx',2);
+    chip.setAttribute('fill', cat.color); svg.appendChild(chip);
+
+    text(svg, pad+16, y, minToTimeStr(ev.start), '#e6e7eb', 13, 'start');
+    text(svg, pad+96, y, minToTimeStr(ev.end),   '#e6e7eb', 13, 'start');
+    text(svg, pad+176, y, `${ev.title}  [${cat.name}]`, '#cbd5e1', 13, 'start');
+    y += 20;
+    if (ev.note){
+      text(svg, pad+176, y, ev.note.length>80? ev.note.slice(0,80)+'…' : ev.note, '#9aa0aa', 12, 'start');
+      y += 18;
+    }
+    line(svg, pad, y-8, W-pad, y-8, '#1b2140', 1);
+  }
+
+  // 合計
+  y += 10;
+  const totals = categoryTotals();
+  const totalLine = Object.entries(totals).map(([cid,m])=>{
+    const name = (state.categories.find(c=>c.id===cid)||{}).name||cid;
+    return `${name}:${fmtHM(m)}`;
+  }).join('  /  ');
+  text(svg, pad, H-pad, `合計：${totalLine}`, '#aeb6c7', 12, 'start', true);
+}
+
+/* SVGユーティリティ */
+function rect(svg,x,y,w,h,fill,stroke='#000',rx=8){ const el = document.createElementNS(svg.namespaceURI,'rect'); el.setAttribute('x',x); el.setAttribute('y',y); el.setAttribute('width',w); el.setAttribute('height',h); el.setAttribute('rx',rx); el.setAttribute('fill',fill); el.setAttribute('stroke',stroke); el.setAttribute('stroke-width','1'); svg.appendChild(el); return el; }
+function line(svg,x1,y1,x2,y2,stroke='#fff',sw=1){ const el = document.createElementNS(svg.namespaceURI,'line'); el.setAttribute('x1',x1); el.setAttribute('y1',y1); el.setAttribute('x2',x2); el.setAttribute('y2',y2); el.setAttribute('stroke',stroke); el.setAttribute('stroke-width',sw); svg.appendChild(el); return el; }
+function text(svg,x,y,txt,fill='#fff',fs=12,anchor='start',bold=false){ const el = document.createElementNS(svg.namespaceURI,'text'); el.setAttribute('x',x); el.setAttribute('y',y); el.setAttribute('fill',fill); el.setAttribute('font-size',fs); el.setAttribute('text-anchor',anchor); if (bold) el.setAttribute('font-weight','700'); el.textContent = txt; svg.appendChild(el); return el; }
+
+/* =========================
+   出力：JSON
+========================= */
+function exportJSON(){
+  const payload = {
+    date: state.date,
+    settings: { timeFormat:'24h', snapMinutes:5, dayStart:'00:00', locale:'ja-JP' },
+    categories: state.categories,
+    events: state.events.map(e=>({ ...e, start: minToTimeStr(e.start), end: minToTimeStr(e.end) })),
+    summary: categoryTotals()
+  };
+  const blob = new Blob([JSON.stringify(payload,null,2)], {type:'application/json'});
+  downloadBlob(blob, `1dayplan_${state.date}_JST.json`);
+}
+
+/* =========================
+   出力：Markdown（コピー＆DL）
+========================= */
+function exportMarkdown(){
+  const totals = categoryTotals();
+  const lines = [];
+  lines.push(`# 1day Plan — ${state.date} (JST)`);
+  lines.push(`## スケジュール`);
+  for (const e of state.events){
+    const cat = state.categories.find(c=>c.id===e.categoryId);
+    lines.push(`- ${minToTimeStr(e.start)}–${minToTimeStr(e.end)} ${e.title} [${cat?.name||e.categoryId}]`);
+    if (e.note) lines.push(`  - メモ: ${e.note.replace(/\n/g,' ')}`);
+  }
+  lines.push(`\n## 合計（カテゴリ別）`);
+  for (const [cid, m] of Object.entries(totals)){
+    const name = state.categories.find(c=>c.id===cid)?.name || cid;
+    lines.push(`- ${name}: ${fmtHM(m)}`);
+  }
+  const md = lines.join('\n');
+  copyText(md);
+  const blob = new Blob([md], {type:'text/markdown;charset=utf-8'});
+  downloadBlob(blob, `1dayplan_${state.date}_JST.md`);
+}
+
+function fmtHM(min){ const h=Math.floor(min/60); const m=min%60; return `${h}h${pad2(m)}m`; }
+function categoryTotals(){
+  const map = {};
+  for (const e of state.events){
+    const m = e.end - e.start;
+    map[e.categoryId] = (map[e.categoryId]||0) + m;
+  }
+  return map;
+}
+
+/* =========================
+   出力：三面図PNG
+   （左=リスト / 右上=時計 / 右下=帯）
+========================= */
+async function exportThreePanePng(){
+  // 各SVGをPNGに
+  const clockPng = await svgToPng($('#clockSvg'), 800, 800, 2);
+  const bandPng  = await svgToPng($('#bandSvg'), 1600, 440, 2);
+  const listPng  = await svgToPng($('#listSvg'), 1600, 640, 2);
+
+  // キャンバス合成（1080×1920に収める）
+  const W=1080, H=1920, pad=32;
+  const cvs = document.createElement('canvas'); cvs.width=W; cvs.height=H;
+  const ctx = cvs.getContext('2d');
+
+  // 背景
+  ctx.fillStyle = '#0f1220'; ctx.fillRect(0,0,W,H);
+  // タイトル
+  ctx.fillStyle = '#cbd5e1'; ctx.font = '600 24px system-ui, -apple-system, "Hiragino Sans", "Noto Sans JP"';
+  ctx.fillText(`1day Plan — ${state.date} (JST)`, pad, pad+8);
+
+  // レイアウト：左（リスト）/ 右上（時計）/ 右下（帯）
+  const leftW = Math.floor(W*0.54), rightW = W - leftW - pad*3;
+  // 左：リスト
+  await drawImageFit(ctx, listPng, pad, pad+28, leftW, H - pad*2 - 28);
+  // 右上：時計
+  const rightX = pad*2 + leftW;
+  const rightH = Math.floor((H - pad*3 - 28)/2);
+  await drawImageFit(ctx, clockPng, rightX, pad+28, rightW, rightH);
+  // 右下：帯
+  await drawImageFit(ctx, bandPng, rightX, pad*2+28+rightH, rightW, rightH);
+
+  // 合計（下部）
+  ctx.fillStyle = '#aeb6c7'; ctx.font = '500 14px system-ui, -apple-system, "Hiragino Sans"';
+  const totals = categoryTotals();
+  const line = Object.entries(totals).map(([cid,m])=>{
+    const name = (state.categories.find(c=>c.id===cid)||{}).name||cid;
+    return `${name}:${fmtHM(m)}`;
+  }).join(' / ');
+  ctx.fillText(`合計：${line}`, pad, H - 12);
+
+  const blob = await new Promise(res=>cvs.toBlob(res,'image/png'));
+  downloadBlob(blob, `1dayplan_${state.date}_JST_all.png`);
+}
+
+async function svgToPng(svgEl, targetW, targetH, scale=1){
+  // SVG -> 画像（Canvas経由）
+  const clone = svgEl.cloneNode(true);
+  inlineComputedStyles(clone);
+  const svgStr = new XMLSerializer().serializeToString(clone);
+  const svgBlob = new Blob([svgStr], {type:'image/svg+xml'});
+  const url = URL.createObjectURL(svgBlob);
+  const img = await loadImg(url);
+  const cvs = document.createElement('canvas');
+  cvs.width = targetW*scale; cvs.height = targetH*scale;
+  const ctx = cvs.getContext('2d');
+  ctx.fillStyle = '#0f1220'; ctx.fillRect(0,0,cvs.width,cvs.height);
+  // 等倍描画（viewBoxに合わせるため drawImage はそのまま）
+  ctx.drawImage(img, 0, 0, cvs.width, cvs.height);
+  URL.revokeObjectURL(url);
+  return await new Promise(res=>cvs.toBlob(res,'image/png'));
+}
+function inlineComputedStyles(svg){
+  // foreignObject 不使用なので最低限でOK
+  const walk = (n)=>{
+    if (n.nodeType===1){
+      const cs = getComputedStyle(n);
+      const style = [
+        'font-family','font-weight','font-size','fill','stroke','stroke-width','opacity',
+        'text-anchor','shape-rendering'
+      ].map(k=> cs[k] ? `${k}:${cs[k]}`: '').filter(Boolean).join(';');
+      if (style) n.setAttribute('style', style);
+      for (const ch of n.childNodes) walk(ch);
+    }
+  };
+  walk(svg);
+}
+function loadImg(src){ return new Promise(res=>{ const i=new Image(); i.onload=()=>res(i); i.src=src; }); }
+async function drawImageFit(ctx, pngBlob, x,y,w,h){
+  const url = URL.createObjectURL(pngBlob);
+  const img = await loadImg(url);
+  // cover風（ここでは contain 優先で歪み無し）
+  const scale = Math.min(w/img.width, h/img.height);
+  const dw = img.width*scale, dh = img.height*scale;
+  const ox = x + (w - dw)/2, oy = y + (h - dh)/2;
+  ctx.drawImage(img, ox, oy, dw, dh);
+  URL.revokeObjectURL(url);
+}
+
+/* =========================
+   保存/復元（localStorage）
+========================= */
+function persist(){
+  const save = {
+    date: state.date,
+    categories: state.categories,
+    events: state.events
+  };
+  localStorage.setItem('planner_demo_v1', JSON.stringify(save));
+}
+function restore(){
+  const raw = localStorage.getItem('planner_demo_v1');
+  if (!raw) return;
+  try{
+    const obj = JSON.parse(raw);
+    state.date = obj.date || state.date;
+    state.categories = obj.categories || state.categories;
+    state.events = (obj.events||[]).map(e=>({ ...e, start: typeof e.start==='string'? timeStrToMin(e.start): e.start, end: typeof e.end==='string'? timeStrToMin(e.end): e.end }));
+    $('#dateInput').value = state.date;
+    // 再描画に備えカテゴリ選択再構築
+    $('#catInput').innerHTML = state.categories.map(c=>`<option value="${c.id}">${c.name}</option>`).join('');
+  }catch(e){ console.warn('restore failed', e); }
+}
+
+/* =========================
+   ユーティリティ
+========================= */
+function downloadBlob(blob, filename){
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(a.href), 1000);
+}
+async function copyText(s){
+  try{
+    if (navigator.clipboard?.writeText) await navigator.clipboard.writeText(s);
+    else throw new Error('clipboard API unavailable');
+    alert('Markdownをクリップボードにコピーしました。ファイルも保存しました。');
+  }catch{
+    // フォールバック
+    const ta = document.createElement('textarea'); ta.value = s;
+    document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove();
+  }
+}
+
+/* =========================
+   全描画
+========================= */
+function drawAll(){
+  renderEventList();
+  drawClock();
+  drawBand();
+  drawListSvg();
+}
+
+// 現在時刻ライン更新（1分毎）
+setInterval(drawClock, 60000);
+
+initUI();
+</script>
+</body>
+</html>
